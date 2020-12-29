@@ -1,12 +1,21 @@
 Welcome to AutoAlbum's documentation!
 =====================================
 
-.. automodule:: autoalbum
-   :members:
-
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+.. automodule:: autoalbum
+   :members:
+
+.. automodule:: autoalbum.api
+   :members:
+
+.. automodule:: autoalbum.auth
+   :members:
+
+.. automodule:: autoalbum.configurator
+   :members:
 
 
 
