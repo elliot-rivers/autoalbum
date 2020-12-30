@@ -1,4 +1,7 @@
-'''Programmatic albums for Google Photos'''
+'''Programmatic albums for Google Photos
+
+I wish
+'''
 
 from .api import API
-from . import auth
+from . import auth, util
