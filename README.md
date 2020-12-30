@@ -9,6 +9,9 @@ Why not tho? _Because Google Photos's API doesn't let you do anything with exist
 
 By _"run"_ here, I mean: create a configuration file and then do nothing with it.
 
+I'm using Pipenv to manage deps, but do whatever. `pipenv install '-e .'` is my jam.
+I'm bad about not specifying specific versions of things sorry.
+
 (Instructions adapted from [Photos-Upload](https://github.com/shraiysh/Photos-Upload) thanks)
 ...but there's no point in following them :shrug:
 

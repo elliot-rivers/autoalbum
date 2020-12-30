@@ -7,7 +7,7 @@ with open("VERSION", "r") as fh:
     version = fh.read()
 
 setuptools.setup(
-    name="elliot",
+    name="autoalbum",
     version=version,
     author="Elliot",
     description="Automated Google Photos Albums",
@@ -22,8 +22,10 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires=[
-        #'google-auth-oauthlib',
-        #'google-auth',
-        #'google-api-python-client',
+        'google-auth-oauthlib',
+        'google-auth',
+        'google-api-python-client',
+        'python-dateutil',
+        'inquirer',
     ],
 )
