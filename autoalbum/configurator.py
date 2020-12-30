@@ -6,42 +6,15 @@ TODO more instructions later
 '''
 
 import argparse
-import json
 from pathlib import Path
 
+import PyInquirer
 from PyInquirer import prompt
 
 import autoalbum
+from autoalbum.util import load_json, save_json
 
-def load_json(json_path):
-    '''Load JSON utility function
-
-    I think manipulating files is ugly so here's a short utility to do this for me
-
-    Args:
-        json_path (PathLike): path to JSON file to load
-
-    Returns:
-        dict: Loaded JSON data
-    '''
-    data = {}
-    with open(json_path, 'r') as file:
-        data = json.load(file)
-    return data
-
-def save_json(json_path, data):
-    '''Save JSON utility function
-
-    I think manipulating files is ugly so here's a short utility to do this for me
-
-    Args:
-        json_path (PathLike): path to JSON file to write to
-        data (dict): data to write to JSON
-    '''
-    with open(json_path, 'w') as file:
-        json.dump(data, file)
-
-def is_album_shared(source_or_dest):
+def is_album_shared(source_or_dest, default=False):
     '''Ask the user if the specified album is owned or shared
 
     Args:
@@ -51,20 +24,26 @@ def is_album_shared(source_or_dest):
     Returns:
         bool: True if the user specifies "shared", else False
     '''
+    choices = [
+        {'name': 'Yes; I own it', 'value': False},
+        {'name': "No; It's shared with me", 'value': True},
+    ]
+
+    if default:
+        # PyInquirer bug necessitates this for defaults working "correctly"
+        choices.reverse()
+
     question = [
         {
             'type': 'list',
             'name': 'is_shared',
             'message': 'Do you own the {} album?'.format(source_or_dest),
-            'choices': [
-                {'name': 'Yes; I own it', 'value': False},
-                {'name': "No; It's shared with me", 'value': True},
-            ],
+            'choices': choices,
         }
     ]
     return prompt(question)['is_shared']
 
-def prompt_for_album(source_or_dest, albums):
+def prompt_for_album(source_or_dest, albums, default=None):
     '''Ask the user to select one from a list of albums
 
     Args:
@@ -76,12 +55,25 @@ def prompt_for_album(source_or_dest, albums):
     Returns:
         dict: The album that the user selected
     '''
+    # If a default exists, figure out which index to start at
+    default_album = None
+    if default:
+        for idx, album in enumerate(albums):
+            if album['value'].get('id', None) == default:
+                default_album = idx
+                break
+        # Shuffle the list because of a PyInquirer bug
+        # Otherwise, I'd have solved this with list-comp
+        if PyInquirer.__version__ <= '1.0.3':
+            albums.insert(0, albums.pop(default_album))
+
     question = [
         {
             'type': 'list',
             'name': 'album',
             'message': 'Which album is the {}?'.format(source_or_dest),
             'choices': albums,
+            'default': default_album, # I believe this option to be currently ignored :/
         }
     ]
     return prompt(question)['album']
@@ -111,7 +103,7 @@ def main(conf_path, secret_file=None):
         conf_path (PathLike): Path to configuration file
         secret_file (PathLike, optional): Path to secret file from Google API Console
     '''
-    conf = {}
+    conf = {'source': {}, 'destination': {}}
 
     if conf_path.is_dir():
         # If we are given a directory, append default config file name
@@ -151,7 +143,7 @@ def main(conf_path, secret_file=None):
             },
         ]
         ans = prompt(auth_override_questions)
-        if ans['confirm']:
+        if 'confirm' in ans and ans['confirm']:
             del conf['auth']
 
     if 'auth' not in conf:
@@ -169,6 +161,7 @@ def main(conf_path, secret_file=None):
                 },
             ]
             ans = prompt(secret_file_questions)
+            secret_file = ans['secret_file']
             conf['auth'] = load_json(ans['secret_file'])
 
     # Now that we have that, we can use the actual API to get information about albums
@@ -177,16 +170,18 @@ def main(conf_path, secret_file=None):
 
     ## Source album information
     # Figure out if it's a shared album or not
-    source_is_shared = is_album_shared('source')
+    source_is_shared = is_album_shared('source', conf['source'].get('is_shared', None))
     # Grab all albums of that type and store them, formatted for PyInquirer
     options = all_albums[source_is_shared] = \
         format_album_choices(api.list_all_albums(source_is_shared))
     # Ask the user which they want as the source:
-    conf['source_album'] = prompt_for_album('source', options)
+    conf['source']['is_shared'] = source_is_shared
+    conf['source']['id'] = \
+        prompt_for_album('source', options, conf['source'].get('id', None)).get('id', None)
 
     ## Destination album information
     # Figure out if it's a shared album or not
-    dest_is_shared = is_album_shared('destination')
+    dest_is_shared = is_album_shared('destination', conf['destination'].get('is_shared', None))
     # Grab all albums of that type and store them, formatted for PyInquirer
     if dest_is_shared not in all_albums:
         options = all_albums[dest_is_shared] = \
@@ -195,10 +190,12 @@ def main(conf_path, secret_file=None):
     if not dest_is_shared:
         options.insert(0, {'name': '<Create New Album>', 'value': {}})
     # Ask the user which they want as the destination:
-    conf['dest_album'] = prompt_for_album('destination', options)
+    conf['destination']['is_shared'] = dest_is_shared
+    conf['destination']['id'] = \
+        prompt_for_album('destination', options, conf['destination'].get('id',None)).get('id',None)
 
     # One more step if the user wanted to create a new album
-    if not conf['dest_album']:
+    if not conf['destination']:
         source_name = conf['source_album'].get('title', '...')
         album_name_questions = [
             {
@@ -212,6 +209,9 @@ def main(conf_path, secret_file=None):
         conf['dest_album'] = api.create_album(ans['album_title'])
 
     save_json(conf_path, conf)
+    print('Wrote configuration file to:', conf_path)
+    if secret_file:
+        print('It is safe to delete or relocate your secret file ({})'.format(secret_file))
 
 
 if __name__ == '__main__':
